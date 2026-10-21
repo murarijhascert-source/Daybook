@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Daybook</title>
+  <!-- These lines make it installable as a home-screen app -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1f3a5f">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    /* ---------- COLOURS & BASIC LOOK (safe to edit) ---------- */
+    :root {
+      --bg: #f6f4ef;  --card: #ffffff;  --ink: #1d2433;  --muted: #6b7280;
+      --accent: #1f3a5f;  --accent-soft: #e3eaf3;  --done: #9ca3af;  --line: #e5e1d8;
+      --green: #2e9e5b;  --green-soft: #e3f4ea;  --track: #ece8df;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #14171c; --card: #1d2129; --ink: #e8e6e1; --muted: #9aa1ad;
+              --accent: #8fb4e3; --accent-soft: #23303f; --done: #5b6270; --line: #2c313b;
+              --green: #4cc27e; --green-soft: #17301f; --track: #2a2f38; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--ink); padding-bottom: 76px; }
+    header { padding: 20px 16px 8px; }
+    header h1 { margin: 0; font-size: 26px; letter-spacing: -0.5px; }
+    header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    main { padding: 8px 16px; max-width: 640px; margin: 0 auto; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* Input rows */
+    .row { display: flex; gap: 8px; margin-bottom: 12px; }
+    input, textarea, select { font: inherit; color: var(--ink); background: var(--card);
+      border: 1px solid var(--line); border-radius: 10px; padding: 12px; width: 100%; }
+    textarea { min-height: 90px; resize: vertical; }
+    button { font: inherit; border: 0; border-radius: 10px; padding: 12px 16px;
+      background: var(--accent); color: var(--bg); font-weight: 600; cursor: pointer; }
+    button.ghost { background: var(--accent-soft); color: var(--accent); }
+    button.small { padding: 6px 10px; font-size: 13px; }
+
+    /* Lists */
+    .chips { display: flex; gap: 6px; margin-bottom: 12px; }
+    .chip { padding: 6px 12px; border-radius: 999px; background: var(--accent-soft);
+      color: var(--accent); font-size: 13px; font-weight: 600; }
+    .chip.on { background: var(--accent); color: var(--bg); }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li.item { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: 12px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; }
+    li.item input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--accent); }
+    li.item .text { flex: 1; word-break: break-word; }
+    li.item.done .text { color: var(--done); text-decoration: line-through; }
+    .meta { font-size: 12px; color: var(--muted); }
+    .del { background: none; color: var(--muted); padding: 4px 8px; font-size: 18px; }
+    .empty { color: var(--muted); text-align: center; padding: 24px 0; }
+    .note { flex-direction: column; align-items: stretch; }
+
+    /* ---------- MAIN TASK CARDS WITH SUB-TASKS ---------- */
+    .task { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+      padding: 14px; margin-bottom: 12px; transition: background .4s, border-color .4s; }
+    .task.complete { background: var(--green-soft); border-color: var(--green); }
+    .task .head { display: flex; align-items: flex-start; gap: 8px; }
+    .task .title { flex: 1; font-weight: 650; font-size: 17px; word-break: break-word; }
+    .task.complete .title { color: var(--green); }
+    .task .pct { font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; padding-top: 2px; }
+    .task.complete .pct { color: var(--green); }
+    .shape { display: block; width: 100%; height: 44px; margin: 10px 0 6px; cursor: pointer; }
+    .shape .fill { fill: var(--green); transition: width .6s ease; }
+    .shape .track { fill: var(--track); }
+    .shape .outline { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+    .task.complete .shape .outline { stroke: var(--green); }
+    .hint { font-size: 11px; color: var(--muted); text-align: right; margin-bottom: 4px; }
+    .subs li { display: flex; align-items: center; gap: 8px; padding: 9px 4px;
+      border-top: 1px dashed var(--line); cursor: pointer; }
+    .subs li .dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--muted); flex: none;
+      display: grid; place-items: center; font-size: 12px; color: #fff; }
+    .subs li.struck .dot { background: var(--green); border-color: var(--green); }
+    .subs li .stext { flex: 1; word-break: break-word; }
+    .subs li.struck .stext { text-decoration: line-through; text-decoration-thickness: 2px;
+      text-decoration-color: var(--green); color: var(--done); }
+    .subs li .del { font-size: 16px; }
+    .addsub { display: flex; gap: 6px; margin-top: 8px; }
+    .addsub input { padding: 8px 10px; font-size: 14px; }
+    .addsub button { padding: 8px 14px; }
+    .note .top { display: flex; justify-content: space-between; align-items: center; }
+
+    /* Focus timer */
+    .timer { text-align: center; padding: 24px 0; }
+    .clock { font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
+    .timer .row { justify-content: center; }
+    .timer .row button { width: auto; }
+
+    /* Bottom tab bar */
+    nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex; background: var(--card);
+      border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+    nav button { flex: 1; background: none; color: var(--muted); border-radius: 0; padding: 14px 4px;
+      font-size: 13px; }
+    nav button.active { color: var(--accent); box-shadow: inset 0 3px 0 var(--accent); }
+    .settings p { color: var(--muted); font-size: 14px; }
+    .settings button { width: 100%; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Daybook</h1>
+    <p id="today"></p>
+  </header>
+
+  <main>
+    <!-- ========== SCREEN 1: TASKS ========== -->
+    <section id="tasks" class="screen active">
+      <div class="row">
+        <input id="taskInput" placeholder="Add a main task…" autocomplete="off">
+        <button id="addTask" style="width:auto">Add</button>
+      </div>
+      <div class="row">
+        <input id="taskDue" type="date" aria-label="Due date (optional)">
+        <select id="taskShape" aria-label="Progress shape" style="width:auto">
+          <option value="pencil">✏️ Pencil</option>
+          <option value="arrow">➜ Arrow</option>
+          <option value="bar">▬ Bar</option>
+        </select>
+      </div>
+      <div class="chips">
+        <span class="chip on" data-filter="all">All</span>
+        <span class="chip" data-filter="today">Today</span>
+        <span class="chip" data-filter="open">Not done</span>
+      </div>
+      <ul id="taskList"></ul>
+    </section>
+
+    <!-- ========== SCREEN 2: NOTES ========== -->
+    <section id="notes" class="screen">
+      <textarea id="noteInput" placeholder="Write a quick note…"></textarea>
+      <div class="row" style="margin-top:8px"><button id="addNote">Save note</button></div>
+      <ul id="noteList"></ul>
+    </section>
+
+    <!-- ========== SCREEN 3: FOCUS TIMER ========== -->
+    <section id="focus" class="screen">
+      <div class="timer">
+        <div class="meta" id="mode">Focus</div>
+        <div class="clock" id="clock">25:00</div>
+        <div class="row">
+          <button id="startBtn">Start</button>
+          <button id="resetBtn" class="ghost">Reset</button>
+        </div>
+        <div class="row">
+          <button class="ghost small" data-min="25">25 min</button>
+          <button class="ghost small" data-min="50">50 min</button>
+          <button class="ghost small" data-min="5">5 min break</button>
+        </div>
+        <p class="meta" id="sessions"></p>
+      </div>
+    </section>
+
+    <!-- ========== SCREEN 4: SETTINGS / BACKUP ========== -->
+    <section id="more" class="screen settings">
+      <p>Everything is stored only on this phone. Make a backup now and then — if you clear Chrome's data, the app's data goes with it.</p>
+      <button id="exportBtn">Download backup</button>
+      <button id="importBtn" class="ghost">Restore from backup</button>
+      <input id="importFile" type="file" accept="application/json" hidden>
+      <p id="status"></p>
+    </section>
+  </main>
+
+  <nav>
+    <button data-screen="tasks" class="active">✓ Tasks</button>
+    <button data-screen="notes">✎ Notes</button>
+    <button data-screen="focus">◷ Focus</button>
+    <button data-screen="more">⋯ More</button>
+  </nav>
+
+<script>
+/* =========================================================
+   DATA: everything is saved in the phone's localStorage.
+   No internet, no server, no account.
+   ========================================================= */
+const KEY = "daybook-data";
+let data = load();
+
+function load() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || { tasks: [], notes: [], sessions: {} }; }
+  catch (e) { return { tasks: [], notes: [], sessions: {} }; }
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(data)); }
+const $ = (id) => document.getElementById(id);
+const todayISO = () => new Date().toLocaleDateString("en-CA");   // e.g. 2026-10-21
+const escapeHTML = (s) => s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+$("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+
+/* ---------- Tab switching ---------- */
+document.querySelectorAll("nav button").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+    btn.classList.add("active");
+    $(btn.dataset.screen).classList.add("active");
+  };
+});
+
+/* ---------- TASKS (main task + sub-tasks) ---------- */
+let filter = "all";
+const prevPct = {};        // remembers last % so the green slides smoothly
+let refocus = null;        // keeps the keyboard on the sub-task box after adding
+
+// Older saved tasks get an empty sub-task list (keeps your data from version 1)
+data.tasks.forEach(t => { t.subs = t.subs || []; t.shape = t.shape || "pencil"; });
+
+// Percentage done: struck sub-tasks ÷ all sub-tasks.
+function percent(t) {
+  if (!t.subs.length) return t.done ? 100 : 0;
+  return Math.round(100 * t.subs.filter(s => s.done).length / t.subs.length);
+}
+
+function addTask() {
+  const text = $("taskInput").value.trim();
+  if (!text) return;
+  data.tasks.unshift({ id: Date.now(), text, due: $("taskDue").value,
+                       shape: $("taskShape").value, done: false, subs: [] });
+  $("taskInput").value = ""; $("taskDue").value = "";
+  refocus = data.tasks[0].id;           // jump straight to adding its sub-tasks
+  save(); renderTasks();
+}
+$("addTask").onclick = addTask;
+$("taskInput").onkeydown = (e) => { if (e.key === "Enter") addTask(); };
+
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.onclick = () => {
+    document.querySelectorAll(".chip").forEach(c => c.classList.remove("on"));
+    chip.classList.add("on"); filter = chip.dataset.filter; renderTasks();
+  };
+});
+
+/* The three progress shapes. Each is an outline + a green fill clipped to the shape.
+   Drawn on a 300 x 44 canvas. Change the paths to invent your own shapes. */
+const SHAPES = {
+  bar:    { outline: "M14,8 H286 A14,14 0 0 1 286,36 H14 A14,14 0 0 1 14,8 Z", extra: "" },
+  arrow:  { outline: "M2,14 H246 V3 L298,22 L246,41 V30 H2 Z", extra: "" },
+  pencil: { outline: "M8,8 H248 L292,22 L248,36 H8 Q2,36 2,30 V14 Q2,8 8,8 Z",
+            // eraser band, metal band, wood edge, lead tip
+            extra: "M28,8 V36 M40,8 V36 M248,8 V36 M278,17.5 L282,22 L278,26.5" }
+};
+
+function shapeSVG(t, pct) {
+  const s = SHAPES[t.shape] || SHAPES.pencil;
+  const start = prevPct[t.id] ?? pct;
+  return `
+  <svg class="shape" viewBox="0 0 300 44" preserveAspectRatio="none" data-shape="${t.id}"
+       role="img" aria-label="${pct}% done">
+    <defs><clipPath id="clip${t.id}"><path d="${s.outline}"/></clipPath></defs>
+    <g clip-path="url(#clip${t.id})">
+      <rect class="track" x="0" y="0" width="300" height="44"/>
+      <rect class="fill" x="0" y="0" height="44" width="${3 * start}" data-target="${3 * pct}"/>
+    </g>
+    <path class="outline" d="${s.outline}"/>
+    ${s.extra ? `<path class="outline" d="${s.extra}"/>` : ""}
+  </svg>`;
+}
+
+function renderTasks() {
+  const t0 = todayISO();
+  let list = data.tasks;
+  if (filter === "today") list = list.filter(x => x.due && x.due <= t0 && percent(x) < 100);
+  if (filter === "open")  list = list.filter(x => percent(x) < 100);
+  list = [...list].sort((a, b) => ((percent(a) === 100) - (percent(b) === 100)) ||
+                                  ((a.due || "9999") > (b.due || "9999") ? 1 : -1));
+
+  $("taskList").innerHTML = list.length ? list.map(t => {
+    const pct = percent(t), doneCount = t.subs.filter(s => s.done).length;
+    const label = t.subs.length ? `${doneCount}/${t.subs.length} · ${pct}%` : `${pct}%`;
+    return `
+    <li class="task ${pct === 100 ? "complete" : ""}">
+      <div class="head">
+        <div class="title">${pct === 100 ? "✓ " : ""}${escapeHTML(t.text)}
+          ${t.due ? `<div class="meta">${t.due < t0 && pct < 100 ? "Overdue · " : ""}Due ${t.due}</div>` : ""}
+        </div>
+        <span class="pct">${label}</span>
+        <button class="del" data-deltask="${t.id}" aria-label="Delete task">×</button>
+      </div>
+      ${shapeSVG(t, pct)}
+      <div class="hint">tap the ${t.shape} to change shape</div>
+      <ul class="subs">
+        ${t.subs.map(s => `
+          <li class="${s.done ? "struck" : ""}" data-task="${t.id}" data-sub="${s.id}">
+            <span class="dot">${s.done ? "✓" : ""}</span>
+            <span class="stext">${escapeHTML(s.text)}</span>
+            <button class="del" data-delsub="${s.id}" data-task="${t.id}" aria-label="Delete sub-task">×</button>
+          </li>`).join("")}
+      </ul>
+      <div class="addsub">
+        <input placeholder="Add a sub-task…" data-subinput="${t.id}" autocomplete="off">
+        <button class="ghost" data-addsub="${t.id}">+</button>
+      </div>
+    </li>`;
+  }).join("") : `<li class="empty">Nothing here. Add a main task above.</li>`;
+
+  // Slide the green from the old % to the new % (CSS animates it)
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    document.querySelectorAll(".shape .fill").forEach(r => r.setAttribute("width", r.dataset.target));
+  }));
+  list.forEach(t => prevPct[t.id] = percent(t));
+
+  if (refocus) { const box = document.querySelector(`[data-subinput="${refocus}"]`); if (box) box.focus(); refocus = null; }
+}
+
+const findTask = (id) => data.tasks.find(x => x.id === Number(id));
+
+function addSub(taskId) {
+  const box = document.querySelector(`[data-subinput="${taskId}"]`);
+  const text = box.value.trim();
+  if (!text) return;
+  findTask(taskId).subs.push({ id: Date.now(), text, done: false });
+  refocus = Number(taskId);
+  save(); renderTasks();
+}
+
+$("taskList").onclick = (e) => {
+  const el = e.target.closest("[data-deltask],[data-delsub],[data-addsub],[data-shape],li[data-sub]");
+  if (!el) return;
+  const d = el.dataset;
+
+  if (d.deltask) {
+    if (confirm("Delete this task and all its sub-tasks?")) data.tasks = data.tasks.filter(x => x.id !== Number(d.deltask));
+  } else if (d.delsub) {
+    const t = findTask(d.task); t.subs = t.subs.filter(s => s.id !== Number(d.delsub));
+  } else if (d.addsub) {
+    return addSub(d.addsub);
+  } else if (d.shape) {                      // tap the shape: pencil → arrow → bar → pencil
+    const t = findTask(d.shape), order = ["pencil", "arrow", "bar"];
+    t.shape = order[(order.indexOf(t.shape) + 1) % order.length];
+  } else if (d.sub) {                        // tap a sub-task: strike it through / un-strike
+    const t = findTask(d.task), s = t.subs.find(x => x.id === Number(d.sub));
+    const before = percent(t);
+    s.done = !s.done;
+    if (percent(t) === 100 && before < 100 && navigator.vibrate) navigator.vibrate([80, 60, 160]);
+  }
+  save(); renderTasks();
+};
+
+$("taskList").onkeydown = (e) => {
+  if (e.key === "Enter" && e.target.dataset.subinput) addSub(e.target.dataset.subinput);
+};
+
+/* ---------- NOTES ---------- */
+$("addNote").onclick = () => {
+  const text = $("noteInput").value.trim();
+  if (!text) return;
+  data.notes.unshift({ id: Date.now(), text, when: new Date().toLocaleString() });
+  $("noteInput").value = ""; save(); renderNotes();
+};
+
+function renderNotes() {
+  $("noteList").innerHTML = data.notes.length ? data.notes.map(n => `
+    <li class="item note">
+      <div class="top"><span class="meta">${n.when}</span>
+        <button class="del" data-del="${n.id}" aria-label="Delete">×</button></div>
+      <div class="text" style="white-space:pre-wrap">${escapeHTML(n.text)}</div>
+    </li>`).join("") : `<li class="empty">No notes yet.</li>`;
+}
+$("noteList").onclick = (e) => {
+  const id = Number(e.target.dataset.del);
+  if (id && confirm("Delete this note?")) { data.notes = data.notes.filter(n => n.id !== id); save(); renderNotes(); }
+};
+
+/* ---------- FOCUS TIMER ---------- */
+let length = 25 * 60, endsAt = null, remaining = length, tick = null;
+
+function show(sec) { $("clock").textContent = `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`; }
+function showSessions() { const n = data.sessions[todayISO()] || 0; $("sessions").textContent = `Focus sessions today: ${n}`; }
+
+function setLength(min) {
+  clearInterval(tick); tick = null; endsAt = null;
+  length = remaining = min * 60; show(remaining);
+  $("mode").textContent = min === 5 ? "Break" : "Focus";
+  $("startBtn").textContent = "Start";
+}
+document.querySelectorAll("[data-min]").forEach(b => b.onclick = () => setLength(Number(b.dataset.min)));
+
+$("startBtn").onclick = () => {
+  if (tick) {                       // Pause
+    clearInterval(tick); tick = null; $("startBtn").textContent = "Resume"; return;
+  }
+  endsAt = Date.now() + remaining * 1000;   // uses real clock, so it stays correct if the screen sleeps
+  $("startBtn").textContent = "Pause";
+  tick = setInterval(() => {
+    remaining = Math.max(0, Math.round((endsAt - Date.now()) / 1000));
+    show(remaining);
+    if (remaining === 0) {
+      clearInterval(tick); tick = null; $("startBtn").textContent = "Start";
+      if (navigator.vibrate) navigator.vibrate([300, 150, 300]);
+      if ($("mode").textContent === "Focus") {
+        data.sessions[todayISO()] = (data.sessions[todayISO()] || 0) + 1; save(); showSessions();
+      }
+      alert("Time's up!");
+      remaining = length; show(remaining);
+    }
+  }, 500);
+};
+$("resetBtn").onclick = () => setLength(length / 60);
+
+/* ---------- BACKUP / RESTORE ---------- */
+$("exportBtn").onclick = () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `daybook-backup-${todayISO()}.json`;
+  a.click();
+  $("status").textContent = "Backup saved to your Downloads folder.";
+};
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").onchange = async (e) => {
+  try {
+    const incoming = JSON.parse(await e.target.files[0].text());
+    if (!Array.isArray(incoming.tasks)) throw new Error();
+    if (!confirm("Replace current data with this backup?")) return;
+    data = { tasks: incoming.tasks, notes: incoming.notes || [], sessions: incoming.sessions || {} };
+    save(); renderTasks(); renderNotes(); showSessions();
+    $("status").textContent = "Backup restored.";
+  } catch { $("status").textContent = "That file isn't a Daybook backup."; }
+};
+
+/* ---------- START UP ---------- */
+renderTasks(); renderNotes(); showSessions();
+
+// Register the service worker: this is what makes the app open with no internet.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+</body>
+</html>
